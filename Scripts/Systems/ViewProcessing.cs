@@ -47,6 +47,9 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
         foreach (var resEntity in _resFilter.Entities) {
             var res =_world.GetComponent<ResComponent>(resEntity, _resId);
             var view = _world.GetComponent<ResViewComponent>(resEntity, _viewId);
+            var curmove = _world.GetComponent<ResMoveComponent>(resEntity, _moveId);
+            if(curmove != null) continue;//moved not complete
+
             if(res.type != ResType.none)
             {
                 var down = GetRes(res.x, res.y - 1);
@@ -87,6 +90,7 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
                 move.starty = res.y + 1;
                 move.endx = res.x;
                 move.endy = res.y;
+                //Debug.Log("create piece x="+res.x+" res.y="+res.y);
             }
         }
     }
