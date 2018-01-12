@@ -57,19 +57,18 @@ public class ScoreProcessing : EcsReactSystem, IEcsInitSystem {
     int _scoreId;
 
     Text scoreui;
-    int soreCount = 0;
+    int scoreCount = 0;
 
 
     void IEcsInitSystem.Initialize () {
         scoreui = GameObject.Find("Canvas/Text").GetComponent<Text>();
         scoreui.text = FormatText();
-        
     }
 
     void IEcsInitSystem.Destroy () { }
 
     string FormatText () {
-        return string.Format ("Score: {0}", soreCount);
+        return string.Format ("Score: {0}", scoreCount);
     }
 
     public override EcsFilter GetReactFilter () {
@@ -87,7 +86,7 @@ public class ScoreProcessing : EcsReactSystem, IEcsInitSystem {
     public override void RunReact (List<int> entities) {
         foreach (var scoreEntity in _scoreFilter.Entities) {
             var score =_world.GetComponent<ScoreComponent>(scoreEntity, _scoreId);
-            soreCount += score.score;
+            scoreCount += score.score;
             scoreui.text = FormatText();
         }
         // and remove all received events.
