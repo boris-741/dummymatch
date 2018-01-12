@@ -1,7 +1,7 @@
 ﻿using LeopotamGroup.Ecs;
 using UnityEngine;
 
-sealed class ResComponent : IEcsComponent {
+sealed class ResComponent {
     public ResType type;
     public int x;
     public int y;

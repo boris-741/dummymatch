@@ -9,9 +9,17 @@ using System.Collections.Generic;
 using LeopotamGroup.Ecs.Internals;
 
 namespace LeopotamGroup.Ecs {
-    public sealed class EcsWorld {
-        public delegate void OnEntityComponentChangeHandler (int entity, int componentId);
+    public delegate void OnEntityComponentChangeHandler (int entity, int componentId);
 
+    /// <summary>
+    /// Basic ecs world implementation.
+    /// </summary>
+    public sealed class EcsWorld : EcsWorldBase<EcsWorld> { }
+
+    /// <summary>
+    /// Abstract ecs environment.
+    /// </summary>
+    public abstract class EcsWorldBase<W> where W : EcsWorldBase<W> {
         /// <summary>
         /// Raises on component attached to entity.
         /// </summary>
@@ -70,17 +78,12 @@ namespace LeopotamGroup.Ecs {
         /// <summary>
         /// List of add / remove operations for components on entities.
         /// </summary>
-        readonly List<DelayedUpdate> _delayedUpdates = new List<DelayedUpdate> (128);
+        readonly List<DelayedUpdate> _delayedUpdates = new List<DelayedUpdate> (1024);
 
         /// <summary>
         /// List of requested filters.
         /// </summary>
         readonly List<EcsFilter> _filters = new List<EcsFilter> (64);
-
-        /// <summary>
-        /// Shared data, useful for ScriptableObjects / assets sharing.
-        /// </summary>
-        readonly Dictionary<int, object> _sharedData = new Dictionary<int, object> (32);
 
 #if DEBUG && !ECS_PERF_TEST
         /// <summary>
@@ -93,7 +96,7 @@ namespace LeopotamGroup.Ecs {
         /// Adds new system to processing.
         /// </summary>
         /// <param name="system">System instance.</param>
-        public EcsWorld AddSystem (IEcsSystem system) {
+        public W AddSystem (IEcsSystem system) {
 #if DEBUG && !ECS_PERF_TEST
             if (_inited) {
                 throw new Exception ("Already initialized, cant add new system.");
@@ -122,36 +125,7 @@ namespace LeopotamGroup.Ecs {
                         break;
                 }
             }
-            return this;
-        }
-
-        /// <summary>
-        /// Sets shared data by key. Exists data will be overwritten.
-        /// </summary>
-        /// <param name="key">Key.</param>
-        public EcsWorld SetSharedData (string key, object data) {
-#if DEBUG && !ECS_PERF_TEST
-            if (key == null || data == null) {
-                throw new ArgumentNullException ("Invalid parameters");
-            }
-#endif
-            _sharedData[key.GetHashCode ()] = data;
-            return this;
-        }
-
-        /// <summary>
-        /// Get shared data by key.
-        /// </summary>
-        /// <param name="key">Key.</param>
-        public object GetSharedData (string key) {
-#if DEBUG && !ECS_PERF_TEST
-            if (key == null) {
-                throw new ArgumentNullException ("Invalid parameter");
-            }
-#endif
-            object retVal;
-            _sharedData.TryGetValue (key.GetHashCode (), out retVal);
-            return retVal;
+            return this as W;
         }
 
         /// <summary>
@@ -193,7 +167,6 @@ namespace LeopotamGroup.Ecs {
             _componentIds.Clear ();
             _reservedEntityIds.Clear ();
             _filters.Clear ();
-            _sharedData.Clear ();
             _entitiesCount = 0;
             for (var i = _componentPools.Length - 1; i >= 0; i--) {
                 _componentPools[i] = null;
@@ -242,6 +215,7 @@ namespace LeopotamGroup.Ecs {
                 }
                 _entities[_entitiesCount++] = new EcsEntity ();
             }
+            _delayedUpdates.Add (new DelayedUpdate (DelayedUpdate.Op.SafeRemoveEntity, entity, -1));
             return entity;
         }
 
@@ -260,7 +234,7 @@ namespace LeopotamGroup.Ecs {
         /// </summary>
         /// <param name="entity">Entity.</param>
         /// <param name="componentId">Component index. If equals to "-1" - will try to find registered type.</param>
-        public T AddComponent<T> (int entity, int componentId = -1) where T : class, IEcsComponent {
+        public T AddComponent<T> (int entity, int componentId = -1) where T : class {
             if (componentId == -1) {
                 componentId = GetComponentIndex<T> ();
             }
@@ -300,7 +274,7 @@ namespace LeopotamGroup.Ecs {
         /// </summary>
         /// <param name="entity">Entity.</param>
         /// <param name="componentId">Component index. If equals to "-1" - will try to find registered type.</param>
-        public void RemoveComponent<T> (int entity, int componentId = -1) where T : class, IEcsComponent {
+        public void RemoveComponent<T> (int entity, int componentId = -1) where T : class {
             if (componentId == -1) {
                 componentId = GetComponentIndex<T> ();
             }
@@ -312,7 +286,7 @@ namespace LeopotamGroup.Ecs {
         /// </summary>
         /// <param name="entity">Entity.</param>
         /// <param name="componentId">Component index. If equals to "-1" - will try to find registered type.</param>
-        public T GetComponent<T> (int entity, int componentId = -1) where T : class, IEcsComponent {
+        public T GetComponent<T> (int entity, int componentId = -1) where T : class {
             if (componentId == -1) {
                 componentId = GetComponentIndex<T> ();
             }
@@ -337,7 +311,7 @@ namespace LeopotamGroup.Ecs {
         /// </summary>
         /// <param name="entity">Entity.</param>
         /// <param name="componentId">Component index. If equals to "-1" - will try to find registered type.</param>
-        public void UpdateComponent<T> (int entity, int componentId = -1) where T : class, IEcsComponent {
+        public void UpdateComponent<T> (int entity, int componentId = -1) where T : class {
             if (componentId == -1) {
                 componentId = GetComponentIndex<T> ();
             }
@@ -347,7 +321,7 @@ namespace LeopotamGroup.Ecs {
         /// <summary>
         /// Gets component index. Useful for GetComponent() requests as second parameter for performance reason.
         /// </summary>
-        public int GetComponentIndex<T> () where T : class, IEcsComponent {
+        public int GetComponentIndex<T> () where T : class {
             return GetComponentIndex (typeof (T));
         }
 
@@ -357,7 +331,7 @@ namespace LeopotamGroup.Ecs {
         /// <param name="componentType">Component type.</param>
         public int GetComponentIndex (Type componentType) {
 #if DEBUG && !ECS_PERF_TEST
-            if (componentType == null || !typeof (IEcsComponent).IsAssignableFrom (componentType) || !componentType.IsClass) {
+            if (componentType == null || !componentType.IsClass) {
                 throw new Exception ("Invalid component type");
             }
 #endif
@@ -376,7 +350,7 @@ namespace LeopotamGroup.Ecs {
         /// </summary>
         /// <param name="entity">Entity.</param>
         /// <param name="list">List to put results in it.</param>
-        public void GetComponents (int entity, IList<IEcsComponent> list) {
+        public void GetComponents (int entity, IList<object> list) {
             if (list != null) {
                 list.Clear ();
                 var entityData = _entities[entity];
@@ -459,6 +433,12 @@ namespace LeopotamGroup.Ecs {
                             _reservedEntityIds.Add (op.Entity);
                         }
                         break;
+                    case DelayedUpdate.Op.SafeRemoveEntity:
+                        if (!entityData.IsReserved && entityData.ComponentsCount == 0) {
+                            entityData.IsReserved = true;
+                            _reservedEntityIds.Add (op.Entity);
+                        }
+                        break;
                     case DelayedUpdate.Op.AddComponent:
                         if (!entityData.Mask.GetBit (op.Component)) {
                             entityData.Mask.SetBit (op.Component, true);
@@ -471,6 +451,9 @@ namespace LeopotamGroup.Ecs {
                             entityData.Mask.SetBit (op.Component, false);
                             DetachComponent (op.Entity, entityData, op.Component);
                             UpdateFilters (op.Entity, op.Component, _delayedOpMask, entityData.Mask);
+                            if (entityData.ComponentsCount == 0) {
+                                _delayedUpdates.Add (new DelayedUpdate (DelayedUpdate.Op.SafeRemoveEntity, op.Entity, -1));
+                            }
                         }
                         break;
                     case DelayedUpdate.Op.UpdateComponent:
@@ -544,21 +527,23 @@ namespace LeopotamGroup.Ecs {
             }
         }
 
+        [System.Runtime.InteropServices.StructLayout (System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 2)]
         struct DelayedUpdate {
-            public enum Op {
+            public enum Op : short {
                 RemoveEntity,
+                SafeRemoveEntity,
                 AddComponent,
                 RemoveComponent,
                 UpdateComponent
             }
             public Op Type;
             public int Entity;
-            public int Component;
+            public short Component;
 
             public DelayedUpdate (Op type, int entity, int component) {
                 Type = type;
                 Entity = entity;
-                Component = component;
+                Component = (short) component;
             }
         }
 
@@ -572,7 +557,7 @@ namespace LeopotamGroup.Ecs {
             public bool IsReserved;
             public EcsComponentMask Mask = new EcsComponentMask ();
             public int ComponentsCount;
-            public ComponentLink[] Components = new ComponentLink[8];
+            public ComponentLink[] Components = new ComponentLink[6];
         }
     }
 }

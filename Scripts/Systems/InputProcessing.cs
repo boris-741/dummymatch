@@ -29,6 +29,7 @@ public class InputProcessing : IEcsInitSystem, IEcsRunSystem {
     void IEcsRunSystem.Run () {
         if(Input.GetMouseButtonDown(0))   
         {
+            int scoreCount = 1;
             var hit = Physics2D.Raycast(Camera.main.ScreenToWorldPoint(Input.mousePosition), Vector2.zero, 100);
             if (hit.collider != null) {
                 Transform htr = hit.collider.transform;
@@ -38,6 +39,10 @@ public class InputProcessing : IEcsInitSystem, IEcsRunSystem {
                     if(view.transform == htr && move == null)
                     {
                         var res = _world.GetComponent<ResComponent>(viewEntity, _resId);
+                        if(res.type == ResType.blocker)
+                            scoreCount = 10;
+                        var score = _world.AddComponent<ScoreComponent>(_world.CreateEntity());
+                        score.score = scoreCount;
                         res.type = ResType.none;
                         GameObject.Destroy(view.transform.gameObject);
                         //_world.RemoveComponent<ResViewComponent>(viewEntity, _viewId);

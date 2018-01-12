@@ -20,16 +20,19 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
     [EcsIndex (typeof (ResMoveComponent))]
     int _moveId;
 
+    Transform maintr;
+
 
     void IEcsInitSystem.Initialize () {
-        Transform maintr = GameObject.Find("Main").transform;
+        maintr = GameObject.Find("Main").transform;
         foreach (var resEntity in _resFilter.Entities)
         {
-            var res = _world.GetComponent<ResComponent>(resEntity, _resId);
-            var view = _world.AddComponent<ResViewComponent>(resEntity);
-            view.transform = GameObject.Instantiate(Resources.Load(GetResourcePath(res.type)) as GameObject).transform;
-            view.transform.localPosition = new Vector3(res.x, res.y, 0);
-            view.transform.parent = maintr;
+            CreatePiece(resEntity);
+            // var res = _world.GetComponent<ResComponent>(resEntity, _resId);
+            // var view = _world.AddComponent<ResViewComponent>(resEntity);
+            // view.transform = GameObject.Instantiate(Resources.Load(GetResourcePath(res.type)) as GameObject).transform;
+            // view.transform.localPosition = new Vector3(res.x, res.y, 0);
+            // view.transform.parent = maintr;
         }
         
     }
@@ -46,10 +49,10 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
             var view = _world.GetComponent<ResViewComponent>(resEntity, _viewId);
             if(res.type != ResType.none)
             {
-                var down = GetDownRes(res.x, res.y - 1);
+                var down = GetRes(res.x, res.y - 1);
                 if(down != null && down.type == ResType.none)
                 {
-                    int downentity = GetDownEntity(res.x, res.y - 1);
+                    int downentity = GetEntity(res.x, res.y - 1);
                     if(downentity == -1)
                         Debug.Log("down entity -1");
                     var downres = _world.GetComponent<ResComponent>(downentity, _resId);
@@ -62,23 +65,44 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
                     var move = _world.GetComponent<ResMoveComponent>(downentity, _moveId);
                     if(move == null)
                         move =_world.AddComponent<ResMoveComponent>( downentity, _moveId );
-                    Debug.Log("add for x="+_world.GetComponent<ResComponent>(downentity, _resId).x+" y="+_world.GetComponent<ResComponent>(downentity, _resId).y);
+                    //Debug.Log("add for x="+_world.GetComponent<ResComponent>(downentity, _resId).x+" y="+_world.GetComponent<ResComponent>(downentity, _resId).y);
                     move.startx = res.x;
                     move.starty = res.y;
                     move.endx = downres.x;
                     move.endy = downres.y;
-                    //_world.RemoveComponent<ResViewComponent>(resEntity, _viewId);
-                    //_world.RemoveComponent<ResMoveComponent>(resEntity, _moveId);
-                    Debug.Log("Remove for x="+_world.GetComponent<ResComponent>(resEntity, _resId).x+" y="+_world.GetComponent<ResComponent>(resEntity, _resId).y);
-                    List<IEcsComponent> list = new List<IEcsComponent>();
-                    _world.GetComponents(downentity, list);
-                    Debug.Log("down comp count = "+list.Count);
+                    // Debug.Log("Remove for x="+_world.GetComponent<ResComponent>(resEntity, _resId).x+" y="+_world.GetComponent<ResComponent>(resEntity, _resId).y);
+                    // List<object> list = new List<object>();
+                    // _world.GetComponents(downentity, list);
+                    // Debug.Log("down comp count = "+list.Count);
                 }
+            }
+            else if(GetEntity(res.x, res.y + 1) == -1)
+            {
+                res.type = (ResType)Random.Range((int)ResType.blocker, (int)ResType.piece5);
+                CreatePiece(resEntity);
+                var move = _world.GetComponent<ResMoveComponent>(resEntity, _moveId);
+                if(move == null)
+                    move =_world.AddComponent<ResMoveComponent>( resEntity, _moveId );
+                move.startx = res.x;
+                move.starty = res.y + 1;
+                move.endx = res.x;
+                move.endy = res.y;
             }
         }
     }
 
-    int GetDownEntity(int x, int y)
+    void CreatePiece(int resEntity)
+    {
+        var res = _world.GetComponent<ResComponent>(resEntity, _resId);
+        var view = _world.GetComponent<ResViewComponent>(resEntity, _viewId);
+        if(view == null)
+            view = _world.AddComponent<ResViewComponent>(resEntity, _viewId);
+        view.transform = GameObject.Instantiate(Resources.Load(GetResourcePath(res.type)) as GameObject).transform;
+        view.transform.localPosition = new Vector3(res.x, res.y, 0);
+        view.transform.parent = maintr;
+    }
+
+    int GetEntity(int x, int y)
     {
         int down = -1;
         foreach (var resEntity in _resFilter.Entities){
@@ -89,7 +113,7 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
         return down;
     }
 
-    ResComponent GetDownRes(int x, int y)
+    ResComponent GetRes(int x, int y)
     {
         ResComponent down = null;
         foreach (var resEntity in _resFilter.Entities){

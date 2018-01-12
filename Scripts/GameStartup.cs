@@ -11,6 +11,7 @@ public class GameStartup : MonoBehaviour {
         .AddSystem (new ViewProcessing ())
         .AddSystem (new MoveProcessing ())
         .AddSystem (new InputProcessing ())
+        .AddSystem (new ScoreProcessing ())
         .AddSystem (new RemoveProcessing ());
         _world.Initialize ();
     }

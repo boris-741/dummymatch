@@ -12,8 +12,9 @@ namespace LeopotamGroup.Ecs.Internals {
     /// Processes dependency injection to ecs systems. For internal use only.
     /// </summary>
     static class EcsInjections {
-        public static void Inject (EcsWorld world, IEcsSystem system) {
-            var type = system.GetType ();
+        public static void Inject<W> (EcsWorldBase<W> world, IEcsSystem system) where W : EcsWorldBase<W> {
+            var worldType = world.GetType ();
+            var systemType = system.GetType ();
 
             var ecsWorld = typeof (EcsWorld);
             var ecsFilter = typeof (EcsFilter);
@@ -24,9 +25,9 @@ namespace LeopotamGroup.Ecs.Internals {
             var attrEcsFilterExclude = typeof (EcsFilterExcludeAttribute);
             var attrEcsIndex = typeof (EcsIndexAttribute);
 
-            foreach (var f in type.GetFields (BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)) {
+            foreach (var f in systemType.GetFields (BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)) {
                 // [EcsWorld]
-                if (f.FieldType == ecsWorld && !f.IsStatic && Attribute.IsDefined (f, attrEcsWorld)) {
+                if (f.FieldType.IsAssignableFrom (worldType) && !f.IsStatic && Attribute.IsDefined (f, attrEcsWorld)) {
                     f.SetValue (system, world);
                 }
 
@@ -52,16 +53,16 @@ namespace LeopotamGroup.Ecs.Internals {
                     }
 #if DEBUG && !ECS_PERF_TEST
                     if (standardFilterIncDefined && includeMask.IsEmpty ()) {
-                        throw new Exception ("Include filter cant be empty at system: " + type.Name);
+                        throw new Exception ("Include filter cant be empty at system: " + systemType.Name);
                     }
                     if (standardFilterExcDefined && excludeMask.IsEmpty ()) {
-                        throw new Exception ("Exclude filter cant be empty at system: " + type.Name);
+                        throw new Exception ("Exclude filter cant be empty at system: " + systemType.Name);
                     }
                     if (!standardFilterIncDefined && standardFilterExcDefined) {
-                        throw new Exception ("EcsFilterExclude can be applied only as pair to EcsFilterInclude at system: " + type.Name);
+                        throw new Exception ("EcsFilterExclude can be applied only as pair to EcsFilterInclude at system: " + systemType.Name);
                     }
                     if (includeMask != null && excludeMask != null && includeMask.IsIntersects (excludeMask)) {
-                        throw new Exception ("Exclude and include filters are intersected at system: " + type.Name);
+                        throw new Exception ("Exclude and include filters are intersected at system: " + systemType.Name);
                     }
 #endif
                     if (standardFilterIncDefined) {

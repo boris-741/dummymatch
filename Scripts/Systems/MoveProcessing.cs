@@ -46,7 +46,7 @@ public class MoveProcessing : IEcsInitSystem, IEcsRunSystem  {
             }
             else
             {
-                List<IEcsComponent> list = new List<IEcsComponent>();
+                List<object> list = new List<object>();
                 _world.GetComponents(moveEntity, list);
                 if(view == null)
                     Debug.Log("view null for x="+res.x+" y="+res.y+" down comp count = "+list.Count);

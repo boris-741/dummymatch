@@ -1,7 +1,7 @@
 ﻿using LeopotamGroup.Ecs;
 using UnityEngine;
 
-public class ResMoveComponent : IEcsComponent {
+public class ResMoveComponent {
 
     public float tmMove = 0.3f;
     public int cyclemove = 16;

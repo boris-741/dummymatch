@@ -1,6 +1,6 @@
 ﻿using LeopotamGroup.Ecs;
 using UnityEngine;
 
-public class ResViewComponent : IEcsComponent {
+public class ResViewComponent {
 	public Transform transform;
 }
