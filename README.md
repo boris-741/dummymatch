@@ -1,2 +1,2 @@
 # dummymatch
-Leopotam/ecs https://github.com/Leopotam/ecs test project 
+Leopotam/ecs https://github.com/Leopotam/ecs example project 
