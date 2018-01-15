@@ -17,7 +17,7 @@ public class Processing1 : IEcsInitSystem, IEcsRunSystem  {
     [EcsIndex (typeof (Comp1Cpmponent))]
     int _comp1Id;
 
-    bool onlycheck = false;
+    int cyclenum = 0;
 
     void IEcsInitSystem.Initialize () {
         for(int i=0 ; i<10; i++)
@@ -36,7 +36,11 @@ public class Processing1 : IEcsInitSystem, IEcsRunSystem  {
     void IEcsRunSystem.Run () {
         foreach (var mainEntity in _mainFilter.Entities) {
             var res =_world.GetComponent<MainComponent>(mainEntity, _mainId);
-            if(!onlycheck)
+            if(cyclenum == 0)
+            {
+                _world.AddComponent<Comp1Cpmponent>(mainEntity, _comp1Id);
+            }
+            else if(cyclenum == 1)
             {
                 _world.RemoveComponent<Comp1Cpmponent>(mainEntity, _comp1Id);
                 _world.AddComponent<Comp1Cpmponent>(mainEntity, _comp1Id);
@@ -47,6 +51,6 @@ public class Processing1 : IEcsInitSystem, IEcsRunSystem  {
                 if(comp1 == null) Debug.Log("have't comp1 on id="+res.id);
             }
         }
-        onlycheck = true;
+        cyclenum ++;
     }
 }
