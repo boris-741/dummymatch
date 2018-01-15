@@ -81,7 +81,7 @@ public class ViewProcessing : IEcsInitSystem, IEcsRunSystem  {
             }
             else if(GetEntity(res.x, res.y + 1) == -1)
             {
-                res.type = (ResType)Random.Range((int)ResType.blocker, (int)ResType.piece5);
+                res.type = (ResType)Random.Range((int)ResType.blocker, ((int)ResType.piece5 + 1));
                 CreatePiece(resEntity);
                 var move = _world.GetComponent<ResMoveComponent>(resEntity, _moveId);
                 if(move == null)
