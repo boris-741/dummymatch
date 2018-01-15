@@ -43,7 +43,7 @@ public class Processing1 : IEcsInitSystem, IEcsRunSystem  {
             }
             else
             {
-                var comp1 =_world.GetComponent<MainComponent>(mainEntity, _comp1Id);
+                var comp1 =_world.GetComponent<Comp1Cpmponent>(mainEntity, _comp1Id);
                 if(comp1 == null) Debug.Log("have't comp1 on id="+res.id);
             }
         }
