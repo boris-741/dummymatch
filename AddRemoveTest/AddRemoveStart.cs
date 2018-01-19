@@ -8,7 +8,8 @@ public class AddRemoveStart : MonoBehaviour {
 
     void OnEnable () {
         _world = new EcsWorld ()
-        .AddSystem (new Processing1 ());
+        .AddSystem (new Processing1 ())
+        .AddSystem (new Processing2 ());
         _world.Initialize ();
     }
 

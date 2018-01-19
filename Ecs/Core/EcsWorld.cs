@@ -14,12 +14,7 @@ namespace LeopotamGroup.Ecs {
     /// <summary>
     /// Basic ecs world implementation.
     /// </summary>
-    public sealed class EcsWorld : EcsWorldBase<EcsWorld> { }
-
-    /// <summary>
-    /// Abstract ecs environment.
-    /// </summary>
-    public abstract class EcsWorldBase<W> where W : EcsWorldBase<W> {
+    public class EcsWorld {
         /// <summary>
         /// Raises on component attached to entity.
         /// </summary>
@@ -29,6 +24,11 @@ namespace LeopotamGroup.Ecs {
         /// Raises on component detached from entity.
         /// </summary>
         public event OnEntityComponentChangeHandler OnEntityComponentRemoved = delegate { };
+
+        /// <summary>
+        /// Should DI be used or skipped for manual initialization?
+        /// </summary>
+        protected bool UseDependencyInjection = true;
 
         /// <summary>
         /// Registered IEcsPreInitSystem systems.
@@ -73,7 +73,12 @@ namespace LeopotamGroup.Ecs {
         /// <summary>
         /// List of removed entities - they can be reused later.
         /// </summary>
-        readonly List<int> _reservedEntityIds = new List<int> (256);
+        int[] _reservedEntities = new int[256];
+
+        /// <summary>
+        /// Amount of created entities at _entities array.
+        /// </summary>
+        int _reservedEntitiesCount;
 
         /// <summary>
         /// List of add / remove operations for components on entities.
@@ -96,13 +101,15 @@ namespace LeopotamGroup.Ecs {
         /// Adds new system to processing.
         /// </summary>
         /// <param name="system">System instance.</param>
-        public W AddSystem (IEcsSystem system) {
+        public EcsWorld AddSystem (IEcsSystem system) {
 #if DEBUG && !ECS_PERF_TEST
             if (_inited) {
                 throw new Exception ("Already initialized, cant add new system.");
             }
 #endif
-            EcsInjections.Inject (this, system);
+            if (UseDependencyInjection) {
+                EcsInjections.Inject (this, system);
+            }
 
             var preInitSystem = system as IEcsPreInitSystem;
             if (preInitSystem != null) {
@@ -125,7 +132,7 @@ namespace LeopotamGroup.Ecs {
                         break;
                 }
             }
-            return this as W;
+            return this;
         }
 
         /// <summary>
@@ -165,9 +172,9 @@ namespace LeopotamGroup.Ecs {
             _runUpdateSystems.Clear ();
             _runFixedUpdateSystems.Clear ();
             _componentIds.Clear ();
-            _reservedEntityIds.Clear ();
             _filters.Clear ();
             _entitiesCount = 0;
+            _reservedEntitiesCount = 0;
             for (var i = _componentPools.Length - 1; i >= 0; i--) {
                 _componentPools[i] = null;
             }
@@ -180,6 +187,11 @@ namespace LeopotamGroup.Ecs {
         /// Processes all IEcsRunSystem systems with [EcsRunUpdate] attribute.
         /// </summary>
         public void RunUpdate () {
+#if DEBUG && !ECS_PERF_TEST
+            if (!_inited) {
+                throw new Exception ("World not initialized.");
+            }
+#endif
             for (var i = 0; i < _runUpdateSystems.Count; i++) {
                 _runUpdateSystems[i].Run ();
                 ProcessDelayedUpdates ();
@@ -190,6 +202,11 @@ namespace LeopotamGroup.Ecs {
         /// Processes all IEcsRunSystem systems with [EcsRunFixedUpdate] attribute.
         /// </summary>
         public void RunFixedUpdate () {
+#if DEBUG && !ECS_PERF_TEST
+            if (!_inited) {
+                throw new Exception ("World not initialized.");
+            }
+#endif
             for (var i = 0; i < _runFixedUpdateSystems.Count; i++) {
                 _runFixedUpdateSystems[i].Run ();
                 ProcessDelayedUpdates ();
@@ -200,12 +217,16 @@ namespace LeopotamGroup.Ecs {
         /// Creates new entity.
         /// </summary>
         public int CreateEntity () {
+#if DEBUG && !ECS_PERF_TEST
+            if (!_inited) {
+                throw new Exception ("World not initialized.");
+            }
+#endif
             int entity;
-            if (_reservedEntityIds.Count > 0) {
-                var id = _reservedEntityIds.Count - 1;
-                entity = _reservedEntityIds[id];
+            if (_reservedEntitiesCount > 0) {
+                _reservedEntitiesCount--;
+                entity = _reservedEntities[_reservedEntitiesCount];
                 _entities[entity].IsReserved = false;
-                _reservedEntityIds.RemoveAt (id);
             } else {
                 entity = _entitiesCount;
                 if (_entitiesCount == _entities.Length) {
@@ -217,6 +238,34 @@ namespace LeopotamGroup.Ecs {
             }
             _delayedUpdates.Add (new DelayedUpdate (DelayedUpdate.Op.SafeRemoveEntity, entity, -1));
             return entity;
+        }
+
+        /// <summary>
+        /// Creates new entity and adds component to it.
+        /// Faster than CreateEntity() + AddComponent() sequence.
+        /// </summary>
+        /// <param name="componentId">Component index. If equals to "-1" - will try to find registered type.</param>
+        public T CreateEntityWith<T> (int componentId = -1) where T : class {
+#if DEBUG && !ECS_PERF_TEST
+            if (!_inited) {
+                throw new Exception ("World not initialized.");
+            }
+#endif
+            int entity;
+            if (_reservedEntitiesCount > 0) {
+                _reservedEntitiesCount--;
+                entity = _reservedEntities[_reservedEntitiesCount];
+                _entities[entity].IsReserved = false;
+            } else {
+                entity = _entitiesCount;
+                if (_entitiesCount == _entities.Length) {
+                    var newEntities = new EcsEntity[_entitiesCount << 1];
+                    Array.Copy (_entities, newEntities, _entitiesCount);
+                    _entities = newEntities;
+                }
+                _entities[_entitiesCount++] = new EcsEntity ();
+            }
+            return AddComponent<T> (entity, componentId);
         }
 
         /// <summary>
@@ -303,7 +352,7 @@ namespace LeopotamGroup.Ecs {
                     break;
                 }
             }
-            return i != -1 ? _componentPools[link.PoolId].Items[link.ItemId] as T : null;
+            return i != -1 ? (T)_componentPools[link.PoolId].Items[link.ItemId] : null;
         }
 
         /// <summary>
@@ -339,6 +388,11 @@ namespace LeopotamGroup.Ecs {
             var type = componentType.GetHashCode ();
             if (!_componentIds.TryGetValue (type, out retVal)) {
                 retVal = _componentIds.Count;
+#if DEBUG && !ECS_PERF_TEST
+                if (retVal >= EcsComponentMask.BitsCount) {
+                    throw new Exception ("No free room for new components - try to increase EcsComponentMask.RawLength.");
+                }
+#endif
                 _componentIds[type] = retVal;
                 _componentPools[retVal] = new EcsComponentPool (componentType);
             }
@@ -396,8 +450,8 @@ namespace LeopotamGroup.Ecs {
                 InitSystems = _initSystems.Count,
                 RunUpdateSystems = _runUpdateSystems.Count,
                 RunFixedUpdateSystems = _runFixedUpdateSystems.Count,
-                AllEntities = _entitiesCount,
-                ReservedEntities = _reservedEntityIds.Count,
+                ActiveEntities = _entitiesCount - _reservedEntitiesCount,
+                ReservedEntities = _reservedEntitiesCount,
                 Filters = _filters.Count,
                 Components = _componentIds.Count,
                 DelayedUpdates = _delayedUpdates.Count
@@ -430,13 +484,23 @@ namespace LeopotamGroup.Ecs {
                                 componentId++;
                             }
                             entityData.IsReserved = true;
-                            _reservedEntityIds.Add (op.Entity);
+                            if (_reservedEntitiesCount == _reservedEntities.Length) {
+                                var newEntities = new int[_reservedEntitiesCount << 1];
+                                Array.Copy (_reservedEntities, newEntities, _reservedEntitiesCount);
+                                _reservedEntities = newEntities;
+                            }
+                            _reservedEntities[_reservedEntitiesCount++] = op.Entity;
                         }
                         break;
                     case DelayedUpdate.Op.SafeRemoveEntity:
                         if (!entityData.IsReserved && entityData.ComponentsCount == 0) {
                             entityData.IsReserved = true;
-                            _reservedEntityIds.Add (op.Entity);
+                            if (_reservedEntitiesCount == _reservedEntities.Length) {
+                                var newEntities = new int[_reservedEntitiesCount << 1];
+                                Array.Copy (_reservedEntities, newEntities, _reservedEntitiesCount);
+                                _reservedEntities = newEntities;
+                            }
+                            _reservedEntities[_reservedEntitiesCount++] = op.Entity;
                         }
                         break;
                     case DelayedUpdate.Op.AddComponent:
@@ -449,8 +513,8 @@ namespace LeopotamGroup.Ecs {
                     case DelayedUpdate.Op.RemoveComponent:
                         if (entityData.Mask.GetBit (op.Component)) {
                             entityData.Mask.SetBit (op.Component, false);
-                            DetachComponent (op.Entity, entityData, op.Component);
                             UpdateFilters (op.Entity, op.Component, _delayedOpMask, entityData.Mask);
+                            DetachComponent (op.Entity, entityData, op.Component);
                             if (entityData.ComponentsCount == 0) {
                                 _delayedUpdates.Add (new DelayedUpdate (DelayedUpdate.Op.SafeRemoveEntity, op.Entity, -1));
                             }
